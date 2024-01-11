@@ -36,15 +36,14 @@ for fname in images:
         imgPoints.append(corners2)
 
         #draw and display corners:
-        cv.drawChessboardCorners(img, (width,hight), corners2, result)
-        cv.imshow('img', img)
-        cv.waitKey(500)
+        img = cv.drawChessboardCorners(img, (width,hight), corners2, result)
+        cv.imshow('ch', img)
         
         # while True:
         #     if cv.waitKey(1) & 0xFF == ord('q'):
         #         break
 
-cv.destroyAllWindows() 
+# cv.destroyAllWindows() 
 
 #calibration
 ret, mtx, dist, rvecs, tvecs = cv.calibrateCamera(objPoints, imgPoints, gray.shape[::-1], None, None)
