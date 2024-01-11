@@ -2,28 +2,15 @@ import cv2 as cv
 import numpy as np
 import time
 import tkinter as tk
+from  hsvTrackbar import HsvTrackbar 
 
 stream_url = f"http://192.168.0.100:81/stream"
 
 # Utwórz obiekt VideoCapture do odbierania strumienia
-cap = cv.VideoCapture(stream_url)
+# cap = cv.VideoCapture(stream_url)
 
-max_value = 255
-max_value_H = 360//2
-low_H = 0
-low_S = 0
-low_V = 0
-high_H = max_value_H
-high_S = max_value
-high_V = max_value
 window_capture_name = 'Video Capture'
 window_detection_name = 'Object Detection'
-low_H_name = 'Low H'
-low_S_name = 'Low S'
-low_V_name = 'Low V'
-high_H_name = 'High H'
-high_S_name = 'High S'
-high_V_name = 'High V'
 crop_minH = "crop min h"
 crop_maxH = "crop max h"
 crop_minW = "crop min W"
@@ -33,42 +20,7 @@ t_tresh = "tresh"
 dilateIter = "DilateIter"
 erodeIter = "ErodeIter"
 kernelSize = "KernelSize"
-def on_low_H_thresh_trackbar(val):
-    global low_H
-    global high_H
-    low_H = val
-    low_H = min(high_H-1, low_H)
-    cv.setTrackbarPos(low_H_name, window_detection_name, low_H)
-def on_high_H_thresh_trackbar(val):
-    global low_H
-    global high_H
-    high_H = val
-    high_H = max(high_H, low_H+1)
-    cv.setTrackbarPos(high_H_name, window_detection_name, high_H)
-def on_low_S_thresh_trackbar(val):
-    global low_S
-    global high_S
-    low_S = val
-    low_S = min(high_S-1, low_S)
-    cv.setTrackbarPos(low_S_name, window_detection_name, low_S)
-def on_high_S_thresh_trackbar(val):
-    global low_S
-    global high_S
-    high_S = val
-    high_S = max(high_S, low_S+1)
-    cv.setTrackbarPos(high_S_name, window_detection_name, high_S)
-def on_low_V_thresh_trackbar(val):
-    global low_V
-    global high_V
-    low_V = val
-    low_V = min(high_V-1, low_V)
-    cv.setTrackbarPos(low_V_name, window_detection_name, low_V)
-def on_high_V_thresh_trackbar(val):
-    global low_V
-    global high_V
-    high_V = val
-    high_V = max(high_V, low_V+1)
-    cv.setTrackbarPos(high_V_name, window_detection_name, high_V)
+
 
 
 def contur(img, contours):
@@ -96,12 +48,6 @@ def nothing(x):
     pass
 
 cv.namedWindow(window_detection_name, cv.WINDOW_NORMAL)
-cv.createTrackbar(low_H_name, window_detection_name , low_H, max_value_H, on_low_H_thresh_trackbar)
-cv.createTrackbar(high_H_name, window_detection_name , high_H, max_value_H, on_high_H_thresh_trackbar)
-cv.createTrackbar(low_S_name, window_detection_name , low_S, max_value, on_low_S_thresh_trackbar)
-cv.createTrackbar(high_S_name, window_detection_name , high_S, max_value, on_high_S_thresh_trackbar)
-cv.createTrackbar(low_V_name, window_detection_name , low_V, max_value, on_low_V_thresh_trackbar)
-cv.createTrackbar(high_V_name, window_detection_name , high_V, max_value, on_high_V_thresh_trackbar)
 cv.createTrackbar(crop_minH,window_detection_name,0 , 600, nothing)
 cv.createTrackbar(crop_maxH,window_detection_name,0 , 600, nothing)
 
@@ -119,12 +65,6 @@ cv.setTrackbarPos(crop_minH, window_detection_name, 130)
 cv.setTrackbarPos(crop_maxH, window_detection_name, 430)
 cv.setTrackbarPos(crop_minW, window_detection_name, 212)
 cv.setTrackbarPos(crop_maxW, window_detection_name, 615)
-cv.setTrackbarPos(low_H_name, window_detection_name , 114)
-cv.setTrackbarPos(high_H_name, window_detection_name , 143)
-cv.setTrackbarPos(low_S_name, window_detection_name , 104)
-cv.setTrackbarPos(high_S_name, window_detection_name , 206)
-cv.setTrackbarPos(low_V_name, window_detection_name , 28)
-cv.setTrackbarPos(high_V_name, window_detection_name , 108)
 cv.setTrackbarPos(t_tresh, window_detection_name , 100)
 
 cv.setTrackbarPos(dilateIter, window_detection_name , 1)
@@ -137,19 +77,20 @@ def erDil(srcImg):
     erodedImg = cv.erode(srcImg, kernel, iterations= cv.getTrackbarPos(erodeIter,window_detection_name))
     dilatedImg = cv.dilate(erodedImg,kernel,iterations= cv.getTrackbarPos(dilateIter,window_detection_name))
     return dilatedImg
+redTrackBar = HsvTrackbar("red trackbar", 114, 143, 104, 206, 28, 108)
 
 while True:
     # Odczytaj klatkę z strumienia
-    ret, frame = cap.read()
+    # ret, frame = cap.read()
 
-    if not ret:
-        print("Błąd podczas odczytu klatki")
-        break
+    # if not ret:
+    #     print("Błąd podczas odczytu klatki")
+    #     break
 
     # Wyświetl klatkę
     # cv.imshow("Kamera ESP", frame)
-    img = frame 
-    # img =  cv.imread('jpgOdPawela.jpg')
+    # img = frame 
+    img =  cv.imread('jpgOdPawela.jpg')
     # imgR = img[1]
     # cv.imshow("r",imgR)
     # imgHSV = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
@@ -162,7 +103,7 @@ while True:
     # imgHSV = erDil(imgHSV)
     cv.imshow('imgHSV',imgHSV)
 
-    frame_threshold = cv.inRange(imgHSV, (low_H, low_S, low_V), (high_H, high_S, high_V))
+    frame_threshold = cv.inRange(imgHSV, (redTrackBar.low_H, redTrackBar.low_S, redTrackBar.low_V), (redTrackBar.high_H, redTrackBar.high_S, redTrackBar.high_V))
 
     cv.imshow('frame_threshold',frame_threshold)
 
@@ -184,6 +125,6 @@ while True:
         break
 
 # Zwolnij zasoby
-cap.release()
+# cap.release()
 cv.destroyAllWindows()
 
