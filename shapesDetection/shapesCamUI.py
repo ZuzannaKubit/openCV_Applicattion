@@ -2,12 +2,16 @@ import cv2 as cv
 import numpy as np
 import time
 import tkinter as tk
+import socket
+from blockData import*
 from  hsvTrackbar import HsvTrackbar 
+from imageTransform import ImageTransform
+from screenToWorld import ScreenToWorld
 
-stream_url = f"http://192.168.0.100:81/stream"
+stream_url = f"http://192.168.0.101:81/stream"
 
 # Utwórz obiekt VideoCapture do odbierania strumienia
-# cap = cv.VideoCapture(stream_url)
+cap = cv.VideoCapture(stream_url)
 
 window_capture_name = 'Video Capture'
 window_detection_name = 'Object Detection'
@@ -21,28 +25,67 @@ dilateIter = "DilateIter"
 erodeIter = "ErodeIter"
 kernelSize = "KernelSize"
 
+send_pos = False
 
+screenToWorld = ScreenToWorld(190, 280, 200, 300)
+def send_data(sock, message):
+    try:
+        sock.sendall(message.encode("UTF-8"))  # Wysyłanie danych
+    except BlockingIOError:
+        # Brak dostępnych miejsca w buforze
+        pass
 
-def contur(img, contours):
+def contur(img, contours, sock):
+    global send_pos
     for contur in contours:
         approx = cv.approxPolyDP(contur, cv.getTrackbarPos(aprox_contur, window_detection_name)* cv.arcLength(contur, True) / 1000.0, True)
+        
+        area = cv.contourArea(contur)
+        #todo: dodać suwaczki <3
+        xl, yl = screenToWorld.transformToScreen(5,5)
+        xu, yu = screenToWorld.transformToScreen(100,100)
+
+        al = xl * yl
+        au = xu * yu 
+
+        if(area < al or area > au):
+            continue 
         cv.drawContours(img, [approx], 0, (0,100,0), 3)
-        x = approx.ravel()[0]
-        y = approx.ravel()[1]
+        x, y, w, h = cv.boundingRect(approx)
+
+        
+        centerX = int(x + w / 2)
+        centerY = int(y + h / 2)
+
+        worldX, worldY = screenToWorld.transformToWorld(centerX,centerY)
+        
+        coord = "x: " + str(round(worldX, 1)) + " y:  " + str(round(worldY,1))
+        cv.putText(img,coord, (x,y - int(h/2) ), cv.FONT_HERSHEY_COMPLEX, 0.5, (0,0,255))
+
+
         if len(approx) == 3:
             cv.putText(img, "Triangle", (x, y), cv.FONT_HERSHEY_COMPLEX, 0.5, (0,0,0))
+            shape = int(BlockType.Triangle)
         elif len(approx) == 4:
-            x, y, w, h = cv.boundingRect(approx)
-            aspectRatio = float(w)/h
+            
             # print(aspectRatio)
             x = int(x + w / 2)
             y = int(y + h / 2)
-            if aspectRatio >= 0.95 and aspectRatio < 1.05:
-                cv.putText(img, "Square", (x, y), cv.FONT_HERSHEY_COMPLEX, 0.5, (0,0,255))
-            else:
-                cv.putText(img, "rectangle", (x, y), cv.FONT_HERSHEY_COMPLEX, 0.5, (0,0,255))
+            
+            shape = int(BlockType.Square)
+            cv.putText(img, "Square", (x, y), cv.FONT_HERSHEY_COMPLEX, 0.5, (0,0,255))
         else:
             cv.putText(img, "Circle", (x, y), cv.FONT_HERSHEY_COMPLEX, 0.5, (0,0,0))
+            
+            shape = int(BlockType.Circle)
+
+        if send_pos == True:
+            pos = Vector3(float(worldX),0,float(worldY))
+            data = BlockData(pos, shape, int(BlockColor.Red))
+            message = json.dumps(data, cls=BlockDataEncoder)
+            send_data(sock, message)
+            send_pos = False 
+
 
 def nothing(x):
     pass
@@ -78,19 +121,59 @@ def erDil(srcImg):
     dilatedImg = cv.dilate(erodedImg,kernel,iterations= cv.getTrackbarPos(dilateIter,window_detection_name))
     return dilatedImg
 redTrackBar = HsvTrackbar("red trackbar", 114, 143, 104, 206, 28, 108)
+ImgTransform = ImageTransform("image transform",241,122,639,129,241,397,633,404,800,600,300,200)
+
+def create_socket():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setblocking(False)
+    return sock
+
+def connect_to_server(sock, host, port):
+    try:
+        sock.connect((host, port))
+        print("connected")
+    except BlockingIOError:
+        pass
+
+def receive_data(sock):
+    global send_pos
+    try:
+        data = sock.recv(1024)
+        if data:
+            print(f"odebrano: {data.decode()}")
+            msg = data.decode()
+            #trim 
+            msg = msg.strip()
+            #jeśli data to "send_pos()"
+            if msg == "sendBlock":
+                send_pos = True
+            #wtedy ustaw bool że trzeba wysłać 
+    except BlockingIOError:
+        pass            
+
+#values for socket:
+host = "127.0.0.1"
+    
+port = 25001
+client_socket = create_socket()
+print("connecting")
+connect_to_server(client_socket, host, port)
 
 while True:
-    # Odczytaj klatkę z strumienia
-    # ret, frame = cap.read()
 
-    # if not ret:
-    #     print("Błąd podczas odczytu klatki")
-    #     break
+    receive_data(client_socket)
+
+    # Odczytaj klatkę z strumienia
+    ret, frame = cap.read()
+
+    if not ret:
+        print("Błąd podczas odczytu klatki")
+        break
 
     # Wyświetl klatkę
     # cv.imshow("Kamera ESP", frame)
-    # img = frame 
-    img =  cv.imread('jpgOdPawela.jpg')
+    img = frame 
+    # img =  cv.imread('jpgOdPawela.jpg')
     # imgR = img[1]
     # cv.imshow("r",imgR)
     # imgHSV = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
@@ -98,10 +181,11 @@ while True:
     wM = cv.getTrackbarPos(crop_maxH,window_detection_name)
     hm = cv.getTrackbarPos(crop_minW,window_detection_name)
     hM = cv.getTrackbarPos(crop_maxW,window_detection_name)
-    img = img[wm:wM,hm:hM]
+    # img = img[wm:wM,hm:hM]
+    img = ImgTransform.transform(img)
     imgHSV = cv.cvtColor(img, cv.COLOR_RGB2HSV)
     # imgHSV = erDil(imgHSV)
-    cv.imshow('imgHSV',imgHSV)
+    # cv.imshow('imgHSV',imgHSV)
 
     frame_threshold = cv.inRange(imgHSV, (redTrackBar.low_H, redTrackBar.low_S, redTrackBar.low_V), (redTrackBar.high_H, redTrackBar.high_S, redTrackBar.high_V))
 
@@ -111,12 +195,12 @@ while True:
     k = 2 * k + 1
     thrash = cv.GaussianBlur(frame_threshold,(k,k),0)
    
-    cv.imshow("withGausse", thrash)
+    # cv.imshow("withGausse", thrash)
     _, thrash = cv.threshold(thrash, cv.getTrackbarPos(t_tresh,window_detection_name),255, cv.CHAIN_APPROX_NONE)
-    cv.imshow('trash', thrash)
+    # cv.imshow('trash', thrash)
     contours , _ = cv.findContours(thrash, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
 
-    contur(img, contours) 
+    contur(img, contours, client_socket) 
 
     cv.imshow('shapes_detection', img)
     
@@ -125,6 +209,6 @@ while True:
         break
 
 # Zwolnij zasoby
-# cap.release()
+cap.release()
 cv.destroyAllWindows()
 
